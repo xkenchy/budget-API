@@ -1,7 +1,7 @@
 from flask import Flask
 from routes.form_routes import form_bp
 from flask_cors import CORS
-
+from dotenv import load_dotenv
 
 
 def create_app():
@@ -9,6 +9,8 @@ def create_app():
 
     # Enable CORS
     CORS(app)
+
+    load_dotenv()
 
     # Register blueprints
     app.register_blueprint(form_bp, url_prefix='/form')
