@@ -53,3 +53,28 @@ def get_month_to_date_purchases():
     else:
         print("Failed to connect to the database")
         return []
+def get_purchase_categories():
+    connection = postgres_connect()
+    if connection:
+        try:
+            cursor = connection.cursor()
+            get_categories_query = """
+            SELECT name, description FROM budget.category_enum;
+            """
+            cursor.execute(get_categories_query)
+            categories = cursor.fetchall()
+            # Map the results to a list of dictionaries
+            categories_list = [{"name": row[0], "description": row[1]} for row in categories]
+            return categories_list
+
+        except Exception as error:
+            print(f"Error while querying categories: {error}")
+            return []
+
+        finally:
+            cursor.close()
+            connection.close()
+            print("PostgreSQL connection is closed")
+    else:
+        print("Failed to connect to the database")
+        return []

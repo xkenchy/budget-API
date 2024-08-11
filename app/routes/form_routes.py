@@ -1,5 +1,5 @@
 from flask import Blueprint, request, jsonify
-from services.budget_service import insert_purchase, get_month_to_date_purchases
+from services.budget_service import insert_purchase, get_month_to_date_purchases, get_purchase_categories
 
 form_bp = Blueprint('form_bp', __name__)
 
@@ -19,3 +19,8 @@ def submit_form():
 def get_purchases():
     purchases = get_month_to_date_purchases()
     return jsonify(purchases), 200
+
+@form_bp.route('/categories', methods=['GET'])
+def get_categories():
+    categories = get_purchase_categories()
+    return jsonify(categories), 200
