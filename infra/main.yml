@@ -1,0 +1,112 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Resources:
+
+  # S3 Bucket for UI
+  MyS3Bucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: budget-ui
+      AccessControl: PublicRead
+      WebsiteConfiguration:
+        IndexDocument: App.js
+
+  # IAM Role for Lambda to access RDS
+  LambdaExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: LambdaRDSRole
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: LambdaRDSAccessPolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - rds-db:connect
+                  - secretsmanager:GetSecretValue
+                  - logs:CreateLogGroup
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                Resource: "*"
+
+  # Lambda Function
+  MyLambdaFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: MyPythonBFF
+      Handler: app.lambda_handler
+      Role: !GetAtt LambdaExecutionRole.Arn
+      Runtime: python3.9
+      Code:
+        S3Bucket: budget-api
+        S3Key: lambda-code.zip
+      Environment:
+        Variables:
+          DB_HOST: budget.c1w8icmaiq0g.us-east-2.rds.amazonaws.com
+          DB_PORT: '5432'
+          DB_USER: postgres
+          DB_NAME: postgres
+          AWS_REGION: us-east-2
+
+  # API Gateway
+  ApiGatewayRestApi:
+    Type: AWS::ApiGateway::RestApi
+    Properties:
+      Name: BudgetAPI
+      RestApiId: mycustomrestapiid  # Manually setting RestApiId
+      Description: API Gateway for Budget Lambda function
+
+  # API Gateway Method directly on the root resource (no additional path)
+  ApiGatewayMethod:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      AuthorizationType: NONE
+      HttpMethod: POST
+      ResourceId: !GetAtt ApiGatewayRestApi.RootResourceId
+      RestApiId: !Ref ApiGatewayRestApi
+      Integration:
+        IntegrationHttpMethod: POST
+        Type: AWS_PROXY
+        Uri: !Sub
+          - arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${LambdaFunction.Arn}/invocations
+          - LambdaFunction: !GetAtt MyLambdaFunction.Arn
+      MethodResponses:
+        - StatusCode: 200
+
+  # API Gateway Deployment
+  ApiGatewayDeployment:
+    Type: AWS::ApiGateway::Deployment
+    DependsOn: ApiGatewayMethod
+    Properties:
+      RestApiId: !Ref ApiGatewayRestApi
+      StageName: prod
+
+  # Lambda Permission for API Gateway
+  LambdaInvokePermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref MyLambdaFunction
+      Action: lambda:InvokeFunction
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub
+        - arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${ApiGatewayRestApi}/*/POST/
+
+Outputs:
+  S3BucketName:
+    Description: Name of the S3 bucket for UI
+    Value: !Ref MyS3Bucket
+
+  LambdaFunctionName:
+    Description: Name of the Lambda function
+    Value: !Ref MyLambdaFunction
+
+  ApiGatewayUrl:
+    Description: URL of the API Gateway
+    Value: !Sub "https://mycustomrestapiid.execute-api.${AWS::Region}.amazonaws.com/prod"
