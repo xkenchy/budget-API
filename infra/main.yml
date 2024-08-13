@@ -1,12 +1,12 @@
 AWSTemplateFormatVersion: '2010-09-09'
 Resources:
 
-  # S3 Bucket for UI
+  # S3 Bucket for UI (private access)
   MyS3Bucket:
     Type: AWS::S3::Bucket
     Properties:
-      BucketName: budget-ui
-      AccessControl: PublicRead
+      BucketName: budget-ui-blw1998
+      AccessControl: Private
       WebsiteConfiguration:
         IndexDocument: App.js
 
@@ -14,7 +14,6 @@ Resources:
   LambdaExecutionRole:
     Type: AWS::IAM::Role
     Properties:
-      RoleName: LambdaRDSRole
       AssumeRolePolicyDocument:
         Version: '2012-10-17'
         Statement:
@@ -36,17 +35,18 @@ Resources:
                   - logs:PutLogEvents
                 Resource: "*"
 
-  # Lambda Function
+  # Lambda Function (created without initial code)
   MyLambdaFunction:
     Type: AWS::Lambda::Function
     Properties:
-      FunctionName: MyPythonBFF
+      FunctionName: budgetBFF
       Handler: app.lambda_handler
       Role: !GetAtt LambdaExecutionRole.Arn
       Runtime: python3.9
       Code:
-        S3Bucket: budget-api
-        S3Key: lambda-code.zip
+        ZipFile: |
+          def lambda_handler(event, context):
+              return "Lambda created without initial code."
       Environment:
         Variables:
           DB_HOST: budget.c1w8icmaiq0g.us-east-2.rds.amazonaws.com
@@ -60,7 +60,6 @@ Resources:
     Type: AWS::ApiGateway::RestApi
     Properties:
       Name: BudgetAPI
-      RestApiId: mycustomrestapiid  # Manually setting RestApiId
       Description: API Gateway for Budget Lambda function
 
   # API Gateway Method directly on the root resource (no additional path)
@@ -74,29 +73,54 @@ Resources:
       Integration:
         IntegrationHttpMethod: POST
         Type: AWS_PROXY
-        Uri: !Sub
-          - arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${LambdaFunction.Arn}/invocations
-          - LambdaFunction: !GetAtt MyLambdaFunction.Arn
+        Uri: !Sub "arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${MyLambdaFunction.Arn}/invocations"
       MethodResponses:
         - StatusCode: 200
+    DependsOn: MyLambdaFunction  # Ensure Lambda function exists before the method
 
-  # API Gateway Deployment
-  ApiGatewayDeployment:
-    Type: AWS::ApiGateway::Deployment
-    DependsOn: ApiGatewayMethod
-    Properties:
-      RestApiId: !Ref ApiGatewayRestApi
-      StageName: prod
-
-  # Lambda Permission for API Gateway
+  # Lambda Permission for API Gateway (moved to a separate logical resource)
   LambdaInvokePermission:
     Type: AWS::Lambda::Permission
     Properties:
       FunctionName: !Ref MyLambdaFunction
       Action: lambda:InvokeFunction
       Principal: apigateway.amazonaws.com
-      SourceArn: !Sub
-        - arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${ApiGatewayRestApi}/*/POST/
+      SourceArn: !Sub "arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${ApiGatewayRestApi}/prod/POST/*"
+    DependsOn: ApiGatewayMethod  # Ensure the method is created before permission is set
+
+  # API Gateway Deployment (created after permissions and methods)
+  ApiGatewayDeployment:
+    Type: AWS::ApiGateway::Deployment
+    DependsOn: [ApiGatewayMethod, LambdaInvokePermission]
+    Properties:
+      RestApiId: !Ref ApiGatewayRestApi
+      StageName: prod
+
+  # API Gateway Resource to enable CORS
+  ApiGatewayOptions:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      AuthorizationType: NONE
+      HttpMethod: OPTIONS
+      ResourceId: !GetAtt ApiGatewayRestApi.RootResourceId
+      RestApiId: !Ref ApiGatewayRestApi
+      Integration:
+        IntegrationResponses:
+          - StatusCode: 200
+            ResponseParameters:
+              method.response.header.Access-Control-Allow-Headers: "'*'"
+              method.response.header.Access-Control-Allow-Methods: "'*'"
+              method.response.header.Access-Control-Allow-Origin: "'*'"
+        RequestTemplates:
+          application/json: '{statusCode:200}'
+        Type: MOCK
+      MethodResponses:
+        - StatusCode: 200
+          ResponseParameters:
+            method.response.header.Access-Control-Allow-Headers: true
+            method.response.header.Access-Control-Allow-Methods: true
+            method.response.header.Access-Control-Allow-Origin: true
+    DependsOn: ApiGatewayDeployment  # Ensure the deployment is done before setting CORS options
 
 Outputs:
   S3BucketName:
@@ -109,4 +133,4 @@ Outputs:
 
   ApiGatewayUrl:
     Description: URL of the API Gateway
-    Value: !Sub "https://mycustomrestapiid.execute-api.${AWS::Region}.amazonaws.com/prod"
+    Value: !Sub "https://${ApiGatewayRestApi}.execute-api.${AWS::Region}.amazonaws.com/prod"
