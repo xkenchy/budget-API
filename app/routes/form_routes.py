@@ -24,13 +24,13 @@ def get_purchases():
 def get_categories():
     categories = get_purchase_categories()
     return jsonify(categories), 200
-@form_bp.route('/budget-left', methods=['GET'])
-def budget_left():
-    remaining_budget = get_budget_left()
-    if remaining_budget is not None:
-        return jsonify({"remaining_budget": remaining_budget}), 200
-    else:
-        return jsonify({"error": "Unable to calculate remaining budget"}), 500
+@form_bp.route('/budget-left-data', methods=['GET'])
+def budget_data():
+    budget_data = get_budget_left_data()
+    if "error" in budget_data:
+        return jsonify(budget_data), budget_data.get("status_code", 500)
+    return jsonify(budget_data), 200
+
 @form_bp.route('/update-monthly-data', methods=['POST'])
 def update_monthly_data():
     data = request.get_json()

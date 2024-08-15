@@ -78,9 +78,7 @@ def get_purchase_categories():
     else:
         print("Failed to connect to the database")
         return []
-
-
-def get_budget_left():
+def get_budget_left_data():
     connection = postgres_connect()
     if connection:
         try:
@@ -96,7 +94,7 @@ def get_budget_left():
             result = cursor.fetchone()
             if result is None:
                 print(f"No budget found for user {user_id}")
-                return None
+                return {"error": "No budget found"}, 404
 
             monthly_budget = result[0]
 
@@ -114,11 +112,15 @@ def get_budget_left():
             # Step 3: Calculate the remaining budget
             remaining_budget = monthly_budget - total_spent
 
-            return remaining_budget
+            # Return the results as a dictionary
+            return {
+                "monthly_budget": monthly_budget,
+                "budget_left": remaining_budget
+            }
 
         except Exception as error:
-            print(f"Error while calculating remaining budget: {error}")
-            return None
+            print(f"Error while calculating budget data: {error}")
+            return {"error": "Internal server error"}, 500
 
         finally:
             cursor.close()
@@ -126,7 +128,9 @@ def get_budget_left():
             print("PostgreSQL connection is closed")
     else:
         print("Failed to connect to the database")
-        return None
+        return {"error": "Database connection failed"}, 500
+
+
 def upsert_user_monthly_data(monthly_inc, monthly_save, total_mandatory, reoccurrings):
     connection = postgres_connect()
     if connection:
