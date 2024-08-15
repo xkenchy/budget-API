@@ -148,8 +148,11 @@ def upsert_user_monthly_data(monthly_inc, monthly_save, total_mandatory, reoccur
             # Insert the recurring expenses into the monthly_reoccurrings table
             insert_reoccurring_query = """
             INSERT INTO budget.monthly_reoccurrings (user_id, description, amount)
-            VALUES (%s, %s, %s);
+            VALUES (%s, %s, %s)
+            ON CONFLICT (user_id, description) DO UPDATE
+            SET amount = EXCLUDED.amount;
             """
+
             for item in reoccurrings:
                 cursor.execute(insert_reoccurring_query, (user_id, item['description'], item['amount']))
 
@@ -165,3 +168,54 @@ def upsert_user_monthly_data(monthly_inc, monthly_save, total_mandatory, reoccur
             print("PostgreSQL connection is closed")
     else:
         print("Failed to connect to the database")
+def get_user_monthly_data():
+    connection = postgres_connect()
+    if connection:
+        try:
+            cursor = connection.cursor()
+            user_id = 'ben123'  # Hardcoded user ID for Ben
+
+            # Get monthly data from users table
+            get_user_data_query = """
+            SELECT monthly_inc, monthly_save, monthly_budget, monthly_mandatory
+            FROM budget.users
+            WHERE id = %s;
+            """
+            cursor.execute(get_user_data_query, (user_id,))
+            user_data = cursor.fetchone()
+            if not user_data:
+                return {"error": "User not found"}, 404
+
+            monthly_inc, monthly_save, monthly_budget, monthly_mandatory = user_data
+
+            # Get all recurring expenses for the user
+            get_reoccurrings_query = """
+            SELECT description, amount
+            FROM budget.monthly_reoccurrings
+            WHERE user_id = %s;
+            """
+            cursor.execute(get_reoccurrings_query, (user_id,))
+            reoccurrings = cursor.fetchall()
+
+            # Format the reoccurrings into a list of dictionaries
+            reoccurrings_list = [{"description": row[0], "amount": row[1]} for row in reoccurrings]
+
+            return {
+                "monthly_inc": monthly_inc,
+                "monthly_save": monthly_save,
+                "monthly_budget": monthly_budget,
+                "monthly_mandatory": monthly_mandatory,
+                "reoccurrings": reoccurrings_list
+            }
+
+        except Exception as error:
+            print(f"Error while fetching user's monthly data: {error}")
+            return {"error": "Internal server error"}, 500
+
+        finally:
+            cursor.close()
+            connection.close()
+            print("PostgreSQL connection is closed")
+    else:
+        print("Failed to connect to the database")
+        return {"error": "Database connection failed"}, 500

@@ -46,4 +46,11 @@ def update_monthly_data():
 
     upsert_user_monthly_data(monthly_inc, monthly_save, total_mandatory, reoccurrings)
     return jsonify({"message": "User's monthly data and recurring expenses upserted successfully"}), 200
+@form_bp.route('/get-monthly-data', methods=['GET'])
+def get_monthly_data():
+    user_data = get_user_monthly_data()
+    if "error" in user_data:
+        return jsonify(user_data), user_data.get("status_code", 500)
+    return jsonify(user_data), 200
+
 
