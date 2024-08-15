@@ -19,3 +19,4 @@ def postgres_connect():
     except Exception as error:
         print(f"Error connecting to PostgreSQL database: {error}")
         return None
+

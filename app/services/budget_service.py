@@ -78,3 +78,90 @@ def get_purchase_categories():
     else:
         print("Failed to connect to the database")
         return []
+
+
+def get_budget_left():
+    connection = postgres_connect()
+    if connection:
+        try:
+            cursor = connection.cursor()
+
+            # Step 1: Get the user's monthly budget
+            user_id = 'ben123'
+            get_budget_query = """
+            SELECT monthly_budget FROM budget.users
+            WHERE id = %s;
+            """
+            cursor.execute(get_budget_query, (user_id,))
+            result = cursor.fetchone()
+            if result is None:
+                print(f"No budget found for user {user_id}")
+                return None
+
+            monthly_budget = result[0]
+
+            # Step 2: Calculate the sum of the purchases for the month to date
+            start_date = datetime.utcnow().replace(day=1, hour=0, minute=0, second=0, microsecond=0).strftime(
+                '%Y-%m-%d %H:%M:%S')
+            end_date = datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S')
+            get_purchases_sum_query = """
+            SELECT SUM(price) FROM budget.purchases
+            WHERE user_id = %s AND created_at BETWEEN %s AND %s;
+            """
+            cursor.execute(get_purchases_sum_query, (user_id, start_date, end_date))
+            total_spent = cursor.fetchone()[0] or 0  # Default to 0 if no purchases
+
+            # Step 3: Calculate the remaining budget
+            remaining_budget = monthly_budget - total_spent
+
+            return remaining_budget
+
+        except Exception as error:
+            print(f"Error while calculating remaining budget: {error}")
+            return None
+
+        finally:
+            cursor.close()
+            connection.close()
+            print("PostgreSQL connection is closed")
+    else:
+        print("Failed to connect to the database")
+        return None
+def upsert_user_monthly_data(monthly_inc, monthly_save, total_mandatory, reoccurrings):
+    connection = postgres_connect()
+    if connection:
+        try:
+            cursor = connection.cursor()
+            user_id = 'ben123'  # Hardcoded user ID for Ben
+
+            # Upsert the user's monthly data (monthly_inc, monthly_save, monthly_mandatory)
+            upsert_user_query = """
+            INSERT INTO budget.users (id, monthly_inc, monthly_save, monthly_mandatory)
+            VALUES (%s, %s, %s, %s)
+            ON CONFLICT (id) DO UPDATE
+            SET monthly_inc = EXCLUDED.monthly_inc,
+                monthly_save = EXCLUDED.monthly_save,
+                monthly_mandatory = EXCLUDED.monthly_mandatory;
+            """
+            cursor.execute(upsert_user_query, (user_id, monthly_inc, monthly_save, total_mandatory))
+
+            # Insert the recurring expenses into the monthly_reoccurrings table
+            insert_reoccurring_query = """
+            INSERT INTO budget.monthly_reoccurrings (user_id, description, amount)
+            VALUES (%s, %s, %s);
+            """
+            for item in reoccurrings:
+                cursor.execute(insert_reoccurring_query, (user_id, item['description'], item['amount']))
+
+            connection.commit()
+            print("User's monthly data and recurring expenses upserted successfully")
+
+        except Exception as error:
+            print(f"Error while upserting user's monthly data and recurring expenses: {error}")
+
+        finally:
+            cursor.close()
+            connection.close()
+            print("PostgreSQL connection is closed")
+    else:
+        print("Failed to connect to the database")
