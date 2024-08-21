@@ -1,0 +1,6 @@
+# Environment variables file
+.env
+.idea
+# Ignore Python cache files
+__pycache__/
+*.pyc

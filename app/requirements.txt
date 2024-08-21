@@ -1,0 +1,7 @@
+boto3
+psycopg2-binary
+Flask
+flask-cors
+python-dotenv
+awsgi
+pytest
