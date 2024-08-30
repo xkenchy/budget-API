@@ -1,6 +1,7 @@
 import os
 from flask import Flask
 from routes.form_routes import form_bp
+from routes.auth_routes import auth_bp
 from flask_cors import CORS
 from dotenv import load_dotenv
 
@@ -14,6 +15,7 @@ def create_app():
 
     # Register blueprints
     app.register_blueprint(form_bp, url_prefix='/form')
+    app.register_blueprint(auth_bp, url_prefix='/auth')
 
     # Root endpoint for ELB health check
     @app.route('/')
