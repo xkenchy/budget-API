@@ -9,7 +9,7 @@ def submit_form():
     price = data.get('price')
     category = data.get('category')
     item = data.get('item')
-    if not price or not category or not item:
+    if price is None or not category or not item:
         return jsonify({"error": "Missing data"}), 400
 
     insert_purchase(price, category, item)
